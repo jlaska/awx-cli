@@ -13,54 +13,60 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
+import argparse
+
 # TODO: add a plugin loader sometime
 from commands.VersionCommand import VersionCommand
 from commands.JobLaunchCommand import JobLaunchCommand
-
-import sys
 
 __version__ = "1.3.0"
 __author__ = "Michael DeHaan"
 
 class AwxCli:
 
-    def __init__(self):
+    def __init__(self, args):
         """ constructs the top level control system for the AWX CLI """
 
         self.commands = [
-            JobLaunchCommand(self),
-            # awx-cli version
-            VersionCommand(self),
+            VersionCommand,
+            JobLaunchCommand,
         ]
 
-    def show_commands(self):
-        """ all available commands to the screen """
+        args = self.parse_args(args)
 
-        for name in self.get_command_names():
-            print name
-        print ""
-
-    def get_command_names(self):
-        """ get the names of all the commands """
-
-        return [ command.name for command in self.commands ]
-
-    def get_commands(self):
-        """ return all of the available commands """
-
-        return [ self.commands ]
- 
-    def activate(self, args):
-        """ find what command class to use """
-
-        length = len(sys.argv)
-        if length < 2:
-            return self.show_commands()
-        elif length == 2 and sys.argv[1] == "--help":
-            return self.show_commands()
-        else:
-            first = sys.argv[1]
-            for cmd in self.commands:
-                if cmd.name == first:
-                   return cmd.run(args[1:])
+        if not hasattr(args, 'function'):
             raise common.CommandNotFound("unknown command: %s" % first)
+        args.function()(args)
+
+    def parse_args(self, args, **kwargs):
+
+        parser = argparse.ArgumentParser(usage='%(prog)s <options> [command] '
+                '<command-options>')
+
+        # Global arguments
+        parser.add_argument("-s", "--server", dest="server",
+                default=None, metavar="SERVER", required=True,
+                help="AWX host in the form of https://localhost/api")
+        parser.add_argument("-u", "--username", dest="username",
+                default=None, metavar="USERNAME", required=True,
+                help="AWX username")
+        parser.add_argument("-p", "--password", dest="password",
+                default=None, metavar="PASSWORD", required=True,
+                help="AWX password")
+
+        # Command-specific options
+        subparsers = parser.add_subparsers(dest='command')
+        for cmd in self.commands:
+            sb = cmd().parse_args(subparsers)
+            sb.set_defaults(function=cmd)
+
+        # Parse those args
+        args = parser.parse_args()
+
+        if args.command is None or args.command == '':
+            parser.error("No command provided")
+
+        # TODO: Validate command arguments
+
+        return args

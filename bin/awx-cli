@@ -20,9 +20,10 @@ import awx_cli.common as common
 import sys
 
 try:
-    sys.exit(awx_cli.AwxCli().activate(sys.argv))
+    awx_cli.AwxCli(sys.argv)
 except common.BaseException, e:
     print e
     # print >> sys.stderr, e.msg
     sys.exit(1)
 
+sys.exit(0)

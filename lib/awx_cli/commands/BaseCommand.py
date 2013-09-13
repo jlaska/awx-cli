@@ -14,13 +14,23 @@
 # limitations under the License.
 
 import exceptions
+import awx_cli
+import awx_cli.common as common
 
 class BaseCommand(object):
 
-    def __init__(self, toplevel):
-        self.toplevel = toplevel
-        self.name = "BASE-COMMAND"
+    def __init__(self, *args, **kwargs):
+        self.api = None
+
+    def connect(self, args):
+        self.api = common.connect(dict(server=args.server, username=args.username, password=args.password))
+
+    def __call__(self, args):
+        self.connect(args)
+        self.run(args)
+
+    def parse_args(self, subparsers):
+        raise exceptions.NotImplementedError()
 
     def run(self, args):
         raise exceptions.NotImplementedError()
-

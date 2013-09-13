@@ -16,7 +16,6 @@
 
 import datetime
 import exceptions
-import optparse
 import os
 import getpass
 import json
@@ -33,23 +32,6 @@ class BaseException(exceptions.Exception):
 
 class CommandNotFound(BaseException):
     pass
-
-class SortedOptParser(optparse.OptionParser):
-
-    def format_help(self, formatter=None):
-        self.option_list.sort(key=operator.methodcaller('get_opt_string'))
-        return optparse.OptionParser.format_help(self, formatter=None)
-
-def get_parser():
-
-    usage = "%prog [options]"
-    parser = SortedOptParser(usage)
-
-    parser.add_option('-u', '--username', dest='username', default=None, type='str')
-    parser.add_option('-p', '--password', dest='password', default=None, type='str')
-    parser.add_option('-s', '--server',   dest='server',   default=None, type='str')
-  
-    return parser
 
 class Connection(object):
 
@@ -70,7 +52,7 @@ class Connection(object):
     def post(self, endpoint, data):
         url = "%s%s" % (self.server, endpoint)
         request = urllib2.Request(
-            url, 
+            url,
             json.dumps(data),
             {'Content-type': 'application/json'}
         )

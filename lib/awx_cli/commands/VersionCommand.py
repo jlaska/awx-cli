@@ -21,27 +21,16 @@ class VersionCommand(BaseCommand.BaseCommand):
 
     """ shows AWX version information """
 
-    def __init__(self, toplevel):
-        super(VersionCommand, self).__init__(toplevel)
-        self.name = "version"
+    def parse_args(self, subparsers):
+        p = subparsers.add_parser('version',
+            help='Display AWX server version')
+        return p
 
     def run(self, args):
- 
-        parser = common.get_parser()
-        # parser.add_option('-f', '--foo', dest='foo', default=None, type='str')
 
-        (options, args) = parser.parse_args()
-        handle = common.connect(options)
- 
-        data = handle.get('/api/v1/config/')
-
+        data = self.api.get('/api/v1/config/')
         output = dict(
            cli_version = awx_cli.__version__,
            server_version = data['version']
         )
         print common.dump(output)
-
-        return 0
-
-
-

@@ -19,31 +19,37 @@ import awx_cli
 import awx_cli.common as common
 import datetime
 import getpass
+import urllib
 
 class JobLaunchCommand(BaseCommand.BaseCommand):
 
-    """ shows AWX version information """
+    def parse_args(self, subparsers):
+        p = subparsers.add_parser('template.launch',
+            help='Display AWX server version')
+        p.add_argument('-t', '--template', default=None, required=True,
+            type=str, help="Specify job template id")
+        p.add_argument('--sync', default=False,
+            type=bool, help="Indicate whether to wait for job completion (default: %(default)s)")
 
-    def __init__(self, toplevel):
-        super(JobLaunchCommand, self).__init__(toplevel)
-        self.name = "joblaunch"
+        return p
 
     def run(self, args):
 
-        # parse arguments and form connection 
-        parser = common.get_parser()
-        parser.add_option('-t', '--template', dest='template', 
-            default=None, type='int')
-        (options, args) = parser.parse_args()
-        if options.template is None:
-            raise common.BaseException("--template is required")
-
-        # test API connection
-        handle = common.connect(options)
+        # Lookup template by name
+        if not args.template.isdigit():
+            jt_url = "/api/v1/job_templates/?%s" % \
+                urllib.urlencode(dict(name__icontains=args.template))
+            data = self.api.get(jt_url)
+            if data.get('count', 0) == 0:
+                raise common.BaseException("No templates found matching: %s" % args.template)
+                return 1
+            elif data.get('count', 0) > 1:
+                raise common.BaseException("Multiple templates match provided string: %s" % args.template)
+            args.template = data['results'][0].get('id')
 
         # get the job template
-        jt_url = "/api/v1/job_templates/%d/" % options.template
-        data = handle.get(jt_url)
+        jt_url = "/api/v1/job_templates/%d/" % args.template
+        data = self.api.get(jt_url)
         id = data.pop('id')
 
         # add some more info needed to start the job
@@ -60,7 +66,7 @@ class JobLaunchCommand(BaseCommand.BaseCommand):
         # post a new job
 
         jt_jobs_url = "%sjobs/" % jt_url
-        job_result = handle.post(jt_jobs_url, data)
+        job_result = self.api.post(jt_jobs_url, data)
 
         # get the parameters needed to start the job (if any)
         # prompt for values unless given on command line (FIXME)
@@ -69,17 +75,16 @@ class JobLaunchCommand(BaseCommand.BaseCommand):
 
         job_id = job_result['id']
         job_start_url = "/api/v1/jobs/%d/start/" % job_id
-        job_start_info = handle.get(job_start_url)
+        job_start_info = self.api.get(job_start_url)
         start_data = {}
         for password in job_start_info.get('passwords_needed_to_start', []):
             value = getpass.getpass('%s: ' % password)
             start_data[password] = value
 
         # start the job 
-        job_start_result = handle.post(job_start_url, start_data)
+        job_start_result = self.api.post(job_start_url, start_data)
         print common.dump(job_start_result) 
 
         # TODO: optional status polling (FIXME)
-
-        return 0
-
+        if args.sync:
+            raise NotImplementedError("Status polling is not yet implemented")
