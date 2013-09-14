@@ -24,8 +24,8 @@ import urllib
 class JobLaunchCommand(BaseCommand.BaseCommand):
 
     def parse_args(self, subparsers):
-        p = subparsers.add_parser('template.launch',
-            help='Display AWX server version')
+        p = subparsers.add_parser('launch',
+            help='Launch a job template')
         p.add_argument('-t', '--template', default=None, required=True,
             type=str, help="Specify job template id")
         p.add_argument('--sync', default=False,
@@ -42,13 +42,12 @@ class JobLaunchCommand(BaseCommand.BaseCommand):
             data = self.api.get(jt_url)
             if data.get('count', 0) == 0:
                 raise common.BaseException("No templates found matching: %s" % args.template)
-                return 1
             elif data.get('count', 0) > 1:
                 raise common.BaseException("Multiple templates match provided string: %s" % args.template)
             args.template = data['results'][0].get('id')
 
         # get the job template
-        jt_url = "/api/v1/job_templates/%d/" % args.template
+        jt_url = "/api/v1/job_templates/%d/" % int(args.template)
         data = self.api.get(jt_url)
         id = data.pop('id')
 
