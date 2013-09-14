@@ -44,6 +44,9 @@ class AwxCli:
         parser = argparse.ArgumentParser(usage='%(prog)s <options> [command] '
                 '<command-options>')
 
+        if hasattr(parser, '_optionals'):
+            parser._optionals.title = "Options"
+
         # Global arguments
         parser.add_argument("-s", "--server", dest="server",
                 default=None, metavar="SERVER", required=True,
@@ -56,7 +59,8 @@ class AwxCli:
                 help="AWX password")
 
         # Command-specific options
-        subparsers = parser.add_subparsers(dest='command')
+        subparsers = parser.add_subparsers(title='List of Commands',
+            dest='command', description='', metavar='')
         for cmd in self.commands:
             sb = cmd().parse_args(subparsers)
             sb.set_defaults(function=cmd)
