@@ -27,6 +27,16 @@ log = logging.getLogger()
 __version__ = "1.3.0"
 __author__ = "Michael DeHaan"
 
+class AwxArgumentParser(argparse.ArgumentParser):
+    '''
+    Subclass ArgumentParser so we can emit print_help() when no positional
+    arguments are supplied.
+    '''
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+
 class AwxCli:
 
     def __init__(self, args):
@@ -93,8 +103,8 @@ class AwxCli:
         instance of argparse
         '''
 
-        parser = argparse.ArgumentParser(usage='%(prog)s <options> [command] '
-                '<command-options>')
+        parser = AwxArgumentParser(usage='%(prog)s <options> [command] '
+                    '<command-options>')
 
         if hasattr(parser, '_optionals'):
             parser._optionals.title = "Options"
@@ -119,6 +129,8 @@ class AwxCli:
         for cmd in self.commands:
             sb = cmd().parse_args(subparsers)
             sb.set_defaults(function=cmd)
+
+        # TODO - sort subparsers alphabetically
 
         # Parse those args
         args = parser.parse_args()
