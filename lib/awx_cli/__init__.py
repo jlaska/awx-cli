@@ -109,6 +109,9 @@ class AwxCli:
         parser.add_argument("-p", "--password", dest="password",
                 default=None, metavar="PASSWORD", required=True,
                 help="AWX password")
+        parser.add_argument("-v", "--verbose", dest="verbose", action="count",
+                default=0, required=False,
+                help="Increase verbosity")
 
         # Command-specific options
         subparsers = parser.add_subparsers(title='List of Commands',
@@ -122,6 +125,10 @@ class AwxCli:
 
         if args.command is None or args.command == '':
             parser.error("No command provided")
+
+        # Adjust loglevel
+        log.setLevel(max(logging.ERROR - (args.verbose * logging.DEBUG),
+                         logging.DEBUG))
 
         # TODO: Validate command arguments
 
