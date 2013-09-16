@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import exceptions
-import awx_cli
 import awx_cli.common as common
 
 class BaseCommand(object):

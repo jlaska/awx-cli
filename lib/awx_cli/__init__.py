@@ -14,11 +14,15 @@
 # limitations under the License.
 
 import sys
+import os
 import argparse
+import importlib
+import inspect
+import logging
 
-# TODO: add a plugin loader sometime
-from commands.VersionCommand import VersionCommand
-from commands.JobLaunchCommand import JobLaunchCommand
+# set up logging
+logging.basicConfig(level=logging.WARN)
+log = logging.getLogger()
 
 __version__ = "1.3.0"
 __author__ = "Michael DeHaan"
@@ -28,10 +32,7 @@ class AwxCli:
     def __init__(self, args):
         """ constructs the top level control system for the AWX CLI """
 
-        self.commands = [
-            VersionCommand,
-            JobLaunchCommand,
-        ]
+        self.commands = self.loadCommands()
 
         args = self.parse_args(args)
 
@@ -39,7 +40,58 @@ class AwxCli:
             raise common.CommandNotFound("unknown command: %s" % first)
         args.function()(args)
 
-    def parse_args(self, args, **kwargs):
+    def loadCommands(self):
+        '''
+        Find and return a list of subclasses of commands.BaseCommand
+
+        Args:
+
+        Returns:
+        list of classes
+
+        Raises:
+        ImportError
+        '''
+
+        commands = list()
+
+        # Import BaseCommand so we know where to look
+        BaseCommand = importlib.import_module('awx_cli.commands.BaseCommand')
+        module_dir = os.path.dirname(BaseCommand.__file__)
+
+        # Gather other .py modules in the same directory as BaseCommand.py
+        modules = [os.path.splitext(f)[0] for f in os.listdir(module_dir)
+            if f.endswith('.py')]
+
+        for module in modules:
+
+            if module in ['BaseCommand', '__init__']:
+                continue
+
+            # Attempt to import
+            try:
+                obj = importlib.import_module('awx_cli.commands.' + module, 'awx_cli.commands')
+            except ImportError as e:
+                log.error('module could not be imported: %s', e)
+                continue
+
+            # Find subclasses of BaseCommand
+            for (name, cls) in inspect.getmembers(obj, inspect.isclass):
+                if issubclass(cls, BaseCommand.BaseCommand):
+                    commands.append(cls)
+        return commands
+
+    def parse_args(self, *args, **kwargs):
+        '''
+        Parse command-line arguments
+
+        Args:
+        args    positional arguments (optional)
+        kwargs  keyword arguments (optional)
+
+        Returns:
+        instance of argparse
+        '''
 
         parser = argparse.ArgumentParser(usage='%(prog)s <options> [command] '
                 '<command-options>')
