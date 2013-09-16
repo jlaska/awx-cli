@@ -38,24 +38,17 @@ class Connection(object):
     def __init__(self, server):
         self.server = server
 
-    def get(self, endpoint):
+    def _request(self, endpoint, data=None, method='GET'):
         url = "%s%s" % (self.server, endpoint)
-        data = None
-        try:
-            response = urllib2.urlopen(url)
-            data = response.read()
-        except Exception, e:
-            raise BaseException(str(e) + ", url: %s" % (url))
-        result = json.loads(data)
-        return result
+        request = urllib2.Request(url)
 
-    def post(self, endpoint, data):
-        url = "%s%s" % (self.server, endpoint)
-        request = urllib2.Request(
-            url,
-            json.dumps(data),
-            {'Content-type': 'application/json'}
-        )
+        if method in ['PUT', 'PATCH', 'POST', 'DELETE']:
+            request.add_header('Content-type', 'application/json')
+            request.get_method = lambda: method
+
+        if data is not None:
+            request.add_data(json.dumps(data))
+
         data = None
         try:
             response = urllib2.urlopen(request)
@@ -67,6 +60,21 @@ class Connection(object):
             return result
         except:
             return data
+
+    def get(self, endpoint):
+        return self._request(endpoint)
+
+    def post(self, endpoint, data):
+        return self._request(endpoint, data, method='POST')
+
+    def put(self, endpoint, data):
+        return self._request(endpoint, data, method='PUT')
+
+    def patch(self, endpoint, data):
+        return self._request(endpoint, data, method='PATCH')
+
+    def delete(self, endpoint):
+        return self._request(endpoint, method='DELETE')
 
 def get_config_parser():
     parser = ConfigParser.ConfigParser()
