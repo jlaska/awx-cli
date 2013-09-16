@@ -13,19 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import os
+import os.path
+import sys
 import argparse
 import importlib
 import inspect
 import logging
+import ConfigParser
+import re
+
+__version__ = "1.3.0"
+__author__ = "Michael DeHaan"
 
 # set up logging
 logging.basicConfig(level=logging.WARN)
 log = logging.getLogger()
 
-__version__ = "1.3.0"
-__author__ = "Michael DeHaan"
+# Sub-class ConfigParser to add local tweaks
+class AwxCliConfigParser(ConfigParser.SafeConfigParser):
+    # Add support for list-style options
+    def getlist(self, section, option):
+        return re.split(r'[,\s]+', self.get(section, option))
+
+    def getval(self, section, option, default):
+        try:
+            return self.get(section, option)
+        except:
+            return default
 
 class AwxArgumentParser(argparse.ArgumentParser):
     '''
@@ -40,17 +55,56 @@ class AwxArgumentParser(argparse.ArgumentParser):
 class AwxCli:
 
     def __init__(self, args):
-        """ constructs the top level control system for the AWX CLI """
+        """ constructs theself. top level control system for the AWX CLI """
 
-        self.commands = self.loadCommands()
+        self.cfg_file = None
+        self.config = self.load_config()
 
+        self.commands = self.load_commands()
         args = self.parse_args(args)
 
         if not hasattr(args, 'function'):
             raise common.CommandNotFound("unknown command: %s" % first)
         args.function()(args)
 
-    def loadCommands(self):
+    def load_config(self):
+
+        # Determine if an alternate .cfg file was requested via --config.
+        # Configuration is loaded prior to inspection of command-line options.
+        # NOTE: Despite being coded properly, this won't work when calling:
+        #  $ awx-cli --config <foo>.
+        # But will work using ...
+        #  $ awx-cli --config=<foo>.
+        # There appears to be some pre-parsing in the former case.
+        for i,arg in enumerate(sys.argv):
+            if re.search(r'^--config\b', arg):
+                try:
+                    self.cfg_file = [sys.argv[i].split('=',1)[1]]
+                except IndexError:
+                    if len(sys.argv) > i+1:
+                        self.cfg_file = [sys.argv[i+1]]
+                break
+
+        # Determine if an alternate .cfg file was requested via AWX_CLI_CONFIG
+        # environment variable
+        if self.cfg_file is None:
+            local_cfg_file = os.path.expanduser(os.environ.get('AWX_CLI_CONFIG',
+                '~/.awx-cli.cfg'))
+            if os.path.isfile(local_cfg_file):
+                self.cfg_file = local_cfg_file
+
+        # Default to system-wide config file
+        if self.cfg_file is None:
+            self.cfg_file = '/etc/awx/awx-cli.cfg'
+
+        # Read configuration, fail if missing
+        awx_config = AwxCliConfigParser()
+        if len(awx_config.read(self.cfg_file)) == 0:
+            logging.debug("No configuration file loaded")
+
+        return awx_config
+
+    def load_commands(self):
         '''
         Find and return a list of subclasses of commands.BaseCommand
 
@@ -111,14 +165,20 @@ class AwxCli:
 
         # Global arguments
         parser.add_argument("-s", "--server", dest="server",
-                default=None, metavar="SERVER", required=True,
+                default=self.config.getval('general', 'server', 'http://127.0.0.1'),
+                metavar="SERVER", required=False,
                 help="AWX host in the form of https://localhost/api")
         parser.add_argument("-u", "--username", dest="username",
-                default=None, metavar="USERNAME", required=True,
+                default=self.config.getval('general', 'username', 'admin'),
+                metavar="USERNAME", required=False,
                 help="AWX username")
         parser.add_argument("-p", "--password", dest="password",
-                default=None, metavar="PASSWORD", required=True,
+                default=self.config.getval('general', 'password', 'password'),
+                metavar="PASSWORD", required=False,
                 help="AWX password")
+        parser.add_argument("--config", dest="config",
+                default=self.cfg_file, required=False,
+                help="Specify alternate configuration file (default: %(default)s)")
         parser.add_argument("-v", "--verbose", dest="verbose", action="count",
                 default=0, required=False,
                 help="Increase verbosity")
@@ -134,6 +194,11 @@ class AwxCli:
 
         # Parse those args
         args = parser.parse_args()
+
+        # Validate global arguments
+        for field in ['username', 'password', 'server']:
+            if getattr(args, field) is None:
+                parser.error("Missing required --%s parameter" % field)
 
         if args.command is None or args.command == '':
             parser.error("No command provided")

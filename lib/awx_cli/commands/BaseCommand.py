@@ -44,7 +44,7 @@ class BaseCommand(object):
         self.api = None
 
     def connect(self, args):
-        self.api = common.connect(dict(server=args.server, username=args.username, password=args.password))
+        self.api = common.connect(args.server, args.username, args.password)
 
     def __call__(self, args):
         self.connect(args)
