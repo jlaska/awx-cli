@@ -25,9 +25,55 @@ class Organization_List(BaseCommand.BaseCommand):
 
     def run(self, args):
 
-        data = self.api.get('/api/v1/organizations')
+        data = self.api.get('/api/v1/organizations/')
         output = dict(
            results = data.pop('results')
         )
         print common.dump(output)
+
+class Organization_Create(BaseCommand.BaseCommand):
+
+    def parse_args(self, subparsers):
+        p = subparsers.add_parser('create_organization',
+            parents=[BaseCommand.arg_name, BaseCommand.arg_desc],
+            help='Create an organization')
+        return p
+
+    def run(self, args):
+
+        jdata = dict(name=args.name, description=args.desc)
+        data = self.api.post('/api/v1/organizations/', jdata)
+        print common.dump(data)
+
+class Organization_Update(BaseCommand.BaseCommand):
+
+    def parse_args(self, subparsers):
+        p = subparsers.add_parser('update_organization',
+            parents=[BaseCommand.arg_id,
+                BaseCommand.arg_name,
+                BaseCommand.arg_desc],
+            help='Update an organization')
+        return p
+
+    def run(self, args):
+        url = "/api/v1/organizations/%d/" % int(args.id)
+
+        data = self.api.get(url)
+        data.update(dict(name=args.name, description=args.desc))
+        response = self.api.put(url, data)
+        print common.dump(response)
+
+class Organization_Delete(BaseCommand.BaseCommand):
+
+    def parse_args(self, subparsers):
+        p = subparsers.add_parser('delete_organization',
+            parents=[BaseCommand.arg_id,],
+            help='Delete an existing organization')
+        return p
+
+    def run(self, args):
+        url = "/api/v1/organizations/%d/" % int(args.id)
+
+        response = self.api.delete(url)
+        print common.dump(response)
 

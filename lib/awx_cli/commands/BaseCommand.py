@@ -15,6 +15,28 @@
 
 import exceptions
 import awx_cli.common as common
+import argparse
+
+# Define commmon arguments
+arg_id = argparse.ArgumentParser(add_help=False)
+arg_id.add_argument('--id', dest='id',
+    metavar='ID', default=None, required=True,
+    help="Specify resource id")
+
+arg_name = argparse.ArgumentParser(add_help=False)
+arg_name.add_argument('--name', dest='name',
+    metavar='NAME', default=None, required=True,
+    help="Specify resource name")
+
+arg_newname = argparse.ArgumentParser(add_help=False)
+arg_newname.add_argument('--new-name', dest='newname',
+    metavar='NEWNAME', default=None, required=False,
+    help="Specify a new resource name")
+
+arg_desc = argparse.ArgumentParser(add_help=False)
+arg_desc.add_argument('--desc', dest='desc',
+    metavar='DESC', default=None, required=False,
+    help="Specify resource description")
 
 class BaseCommand(object):
 
