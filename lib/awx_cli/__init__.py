@@ -16,12 +16,22 @@
 import os
 import os.path
 import sys
-import argparse
-import importlib
 import inspect
 import logging
 import ConfigParser
 import re
+
+try:
+    import argparse
+except ImportError, e:
+    print "Unable to import argparse.  Is python-argparse installed?"
+    sys.exit(1)
+
+try:
+    import importlib
+except ImportError, e:
+    print "Unable to import importlib.  Is python-importlib installed?"
+    sys.exit(1)
 
 __version__ = "1.3.0"
 __author__ = "Michael DeHaan"
