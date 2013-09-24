@@ -51,7 +51,11 @@ class Connection(object):
             response = urllib2.urlopen(request)
             data = response.read()
         except Exception, e:
-            raise BaseException("%s, url: %s, data: %s, response: %s" % (str(e), url, data, e.read()))
+            err_str = "%s, url: %s, data: %s" % (str(e), url, data, )
+
+            if hasattr(e, 'read'):
+                err_str += ", %s" % (e.read())
+            raise BaseException(err_str)
         try:
             result = json.loads(data)
             return result

@@ -40,6 +40,12 @@ __author__ = "Michael DeHaan"
 logging.basicConfig(level=logging.WARN)
 log = logging.getLogger()
 
+# Enable loglevels before we've fully processed cli args
+matches = re.findall(r'(-v{1,}|--verbose)\b', ' '.join(sys.argv))
+num_verbose = sum([s.count('v') for s in matches])
+log.setLevel(max(logging.ERROR - (num_verbose * logging.DEBUG),
+                 logging.DEBUG))
+
 # Sub-class ConfigParser to add local tweaks
 class AwxCliConfigParser(ConfigParser.SafeConfigParser):
     # Add support for list-style options
@@ -58,24 +64,36 @@ class AwxArgumentParser(argparse.ArgumentParser):
     arguments are supplied.
     '''
     def error(self, message):
-        sys.stderr.write('error: %s\n' % message)
-        self.print_help()
-        sys.exit(2)
+        self.print_usage(sys.stderr)
+        choose_from = ' (choose from'
+        progparts = self.prog.partition(' ')
+        self.exit(2, "error: %(errmsg)s\nTry '%(mainp)s help %(subp)s'"
+                     " for more information.\n" %
+                     {'errmsg': message.split(choose_from)[0],
+                      'mainp': progparts[0],
+                      'subp': progparts[2]})
+
+class AwxHelpFormatter(argparse.HelpFormatter):
+    def start_section(self, heading):
+        # Title-case the headings
+        heading = '%s%s' % (heading[0].upper(), heading[1:])
+        super(AwxHelpFormatter, self).start_section(heading)
 
 class AwxCli:
+    '''
+    Command-line interface to the AWX API.
+    '''
 
     def __init__(self, args):
-        """ constructs theself. top level control system for the AWX CLI """
-
         self.cfg_file = None
         self.config = self.load_config()
 
         self.commands = self.load_commands()
-        args = self.parse_args(args)
+        args = self.parse_args()
 
-        if not hasattr(args, 'function'):
-            raise common.CommandNotFound("unknown command: %s" % first)
-        args.function()(args)
+        if args:
+            if hasattr(args, 'function'):
+                args.function()(args)
 
     def load_config(self):
 
@@ -142,6 +160,8 @@ class AwxCli:
             if module in ['BaseCommand', '__init__']:
                 continue
 
+            log.debug("load_commands() - Looking for BaseCommand objects in '%s'" % module)
+
             # Attempt to import
             try:
                 obj = importlib.import_module('awx_cli.commands.' + module, 'awx_cli.commands')
@@ -152,10 +172,13 @@ class AwxCli:
             # Find subclasses of BaseCommand
             for (name, cls) in inspect.getmembers(obj, inspect.isclass):
                 if issubclass(cls, BaseCommand.BaseCommand):
+                    log.debug("load_commands() - found '%s'" % name)
                     commands.append(cls)
+                else:
+                    log.debug("load_commands() - skipping module '%s'" % name)
         return commands
 
-    def parse_args(self, *args, **kwargs):
+    def parse_args(self, argv=[]):
         '''
         Parse command-line arguments
 
@@ -167,56 +190,85 @@ class AwxCli:
         instance of argparse
         '''
 
-        parser = AwxArgumentParser(usage='%(prog)s <options> [command] '
-                    '<command-options>')
+        parser = AwxArgumentParser(
+                    description=self.__doc__,
+                    epilog='See "awx-cli help <command>" '
+                           'for help on a specific command.',
+                    add_help=False,
+                    formatter_class=AwxHelpFormatter,)
 
         if hasattr(parser, '_optionals'):
             parser._optionals.title = "Options"
 
         # Global arguments
-        parser.add_argument("-s", "--server", dest="server",
+        parser.add_argument("--server", "-s",
+                dest="server",
                 default=self.config.getval('general', 'server', 'http://127.0.0.1'),
-                metavar="SERVER", required=False,
+                metavar="<awx-server-url>", required=False,
                 help="AWX host in the form of https://localhost/api")
-        parser.add_argument("-u", "--username", dest="username",
+        parser.add_argument("--username", "-u", dest="username",
                 default=self.config.getval('general', 'username', 'admin'),
-                metavar="USERNAME", required=False,
+                metavar="<awx-username>", required=False,
                 help="AWX username")
-        parser.add_argument("-p", "--password", dest="password",
+        parser.add_argument("--password", "-p", dest="password",
                 default=self.config.getval('general', 'password', 'password'),
-                metavar="PASSWORD", required=False,
+                metavar="<awx-password>", required=False,
                 help="AWX password")
         parser.add_argument("--config", dest="config",
                 default=self.cfg_file, required=False,
+                metavar="<awx-config-file>",
                 help="Specify alternate configuration file (default: %(default)s)")
-        parser.add_argument("-v", "--verbose", dest="verbose", action="count",
+        format_choices = ['json','text', 'yaml']
+        parser.add_argument("--format", dest="format", choices=format_choices,
+                default=format_choices[0], required=False,
+                metavar="<format>",
+                help="Specify output format")
+        parser.add_argument("--verbose", "-v", dest="verbose", action="count",
                 default=0, required=False,
                 help="Increase verbosity")
+        parser.add_argument("--help", "-h", action='store_true', help=argparse.SUPPRESS)
+
+        options, args = parser.parse_known_args()
+
+        # Track parser_help via command name.  This allows HelpCommand to find the
+        # appropriate parser print_help()
+        help_by_prog = {parser.prog: parser.print_help}
 
         # Command-specific options
         subparsers = parser.add_subparsers(title='List of Commands',
-            dest='command', description='', metavar='')
-        for cmd in self.commands:
-            sb = cmd().parse_args(subparsers)
-            sb.set_defaults(function=cmd)
+            dest='command', metavar='<command>')
+        for command in self.commands:
+            obj = command()
+            command_parser = obj.parse_args(subparsers)
+            command_parser.set_defaults(function=command)
 
-        # TODO - sort subparsers alphabetically
+            # Record base, and and sub, command parsers
+            help_by_prog[command_parser.prog] = command_parser.print_help
+            help_by_prog.update(obj.help_by_prog)
 
         # Parse those args
-        args = parser.parse_args()
+        if options.help or not args:
+            parser.print_help()
+        else:
+            args = parser.parse_args()
 
-        # Validate global arguments
-        for field in ['username', 'password', 'server']:
-            if getattr(args, field) is None:
-                parser.error("Missing required --%s parameter" % field)
+            # pass along subcommand parsers so HelpCommand is able to
+            # display_help()
+            remove_prefix = re.compile(r'^%s\s*' % parser.prog)
+            args.help_by_prog = {remove_prefix.sub('', k):v for k,v in help_by_prog.items()}
 
-        if args.command is None or args.command == '':
-            parser.error("No command provided")
+            # Validate global arguments
+            for field in ['username', 'password', 'server']:
+                if getattr(args, field) is None:
+                    parser.error("Missing required --%s parameter" % field)
 
-        # Adjust loglevel
-        log.setLevel(max(logging.ERROR - (args.verbose * logging.DEBUG),
-                         logging.DEBUG))
+            if args.command is None or args.command == '':
+                parser.error("No command provided")
 
-        # TODO: Validate command arguments
+            # Adjust loglevel
+            log.setLevel(max(logging.ERROR - (args.verbose * logging.DEBUG),
+                             logging.DEBUG))
+
+            # TODO: Validate command arguments
 
         return args

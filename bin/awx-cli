@@ -20,7 +20,7 @@ import awx_cli.common as common
 import sys
 
 try:
-    awx_cli.AwxCli(sys.argv)
+    awx_cli.AwxCli(sys.argv[1:])
 except common.BaseException, e:
     print e
     # print >> sys.stderr, e.msg
