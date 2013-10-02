@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import argparse
+import logging
 import BaseCommand
 import awx_cli.common as common
 
@@ -34,6 +35,9 @@ class Help_Command(BaseCommand.BaseCommand):
 
         return parser
 
+    def connect(self, args):
+       logging.debug("disabling connect() for help command")
+
     def run(self, args):
         """
         Display help about this program or one of its subcommands.
@@ -45,9 +49,9 @@ class Help_Command(BaseCommand.BaseCommand):
 
             # Display subcommand-specific help
             if args.command in args.help_by_prog:
-                args.help_by_prog[args.command]()
+                args.help_by_prog[args.command].print_help()
             else:
                 raise Exception("'%s' is not a valid subcommand" %
                                        args.command)
         else:
-            args.help_by_prog['']()
+            args.help_by_prog[''].print_help()
