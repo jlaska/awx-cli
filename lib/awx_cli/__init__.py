@@ -89,11 +89,11 @@ class AwxCli:
         self.config = self.load_config()
 
         self.commands = self.load_commands()
-        args = self.parse_args()
+        args = self.parse_args(sys.argv[1:])
 
         if args:
             if hasattr(args, 'function'):
-                args.function()(args)
+                args.function(args)
 
     def load_config(self):
 
@@ -158,6 +158,7 @@ class AwxCli:
         for module in modules:
 
             if module in ['BaseCommand', '__init__']:
+                log.debug("load_commands() - skipping module '%s'" % module)
                 continue
 
             log.debug("load_commands() - Looking for BaseCommand objects in '%s'" % module)
@@ -175,10 +176,10 @@ class AwxCli:
                     log.debug("load_commands() - found '%s'" % name)
                     commands.append(cls)
                 else:
-                    log.debug("load_commands() - skipping module '%s'" % name)
+                    log.debug("load_commands() - skipping class '%s'" % name)
         return commands
 
-    def parse_args(self, argv=[]):
+    def parse_args(self, argv):
         '''
         Parse command-line arguments
 
@@ -228,11 +229,11 @@ class AwxCli:
                 help="Increase verbosity")
         parser.add_argument("--help", "-h", action='store_true', help=argparse.SUPPRESS)
 
-        options, args = parser.parse_known_args()
+        options, args = parser.parse_known_args(argv)
 
         # Track parser_help via command name.  This allows HelpCommand to find the
         # appropriate parser print_help()
-        help_by_prog = {parser.prog: parser.print_help}
+        help_by_prog = {parser.prog: parser}
 
         # Command-specific options
         subparsers = parser.add_subparsers(title='List of Commands',
@@ -240,17 +241,17 @@ class AwxCli:
         for command in self.commands:
             obj = command()
             command_parser = obj.parse_args(subparsers)
-            command_parser.set_defaults(function=command)
+            command_parser.set_defaults(function=obj.__call__)
 
             # Record base, and and sub, command parsers
-            help_by_prog[command_parser.prog] = command_parser.print_help
+            help_by_prog[command_parser.prog] = command_parser
             help_by_prog.update(obj.help_by_prog)
 
         # Parse those args
         if options.help or not args:
             parser.print_help()
         else:
-            args = parser.parse_args()
+            args = parser.parse_args(argv)
 
             # pass along subcommand parsers so HelpCommand is able to
             # display_help()
